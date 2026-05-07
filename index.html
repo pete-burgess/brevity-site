@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brevity — Every character counts</title>
+    <meta name="description" content="Brevity checks every text layer against your character limits to prevent issues on launch. A Figma plugin for content-conscious designers.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            pink: '#e60076',
+                            'pink-light': '#fce7f3',
+                            dark: '#323232',
+                            gray: '#d9d9d9',
+                            'ai-blue': '#eaf6fc',
+                            'ai-accent': '#7b6cf0',
+                        }
+                    },
+                    fontFamily: {
+                        serif: ['"Source Serif 4"', 'Georgia', 'serif'],
+                        sans: ['"Source Sans 3"', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        card: '0 4px 4px 0 #fce7f3',
+                        'card-ai': '0 4px 4px 0 #b8d9ec',
+                        screenshot: '4px 4px 8.6px 0 rgba(0,0,0,0.1)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* ── Skip to content ── */
+        .skip-link {
+            position: absolute;
+            top: -100%;
+            left: 1rem;
+            z-index: 9999;
+            padding: 0.75rem 1.25rem;
+            background: #323232;
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 0.875rem;
+            text-decoration: none;
+            border-radius: 0 0 8px 8px;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+
+        /* ── Global focus style ── */
+        :focus-visible {
+            outline: 3px solid #e60076;
+            outline-offset: 3px;
+            border-radius: 4px;
+        }
+
+        /* ── Scroll reveal: sections ── */
+        .reveal {
+            opacity: 0;
+            transform: translateY(32px);
+            filter: blur(6px);
+            transition:
+                opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+                filter 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            will-change: opacity, transform, filter;
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+            filter: blur(0);
+        }
+
+        /* ── Scroll reveal: feature cards (fade + scale + blur) ── */
+        .feature-card {
+            opacity: 0;
+            transform: translateY(10px) scale(0.985);
+            filter: blur(3px);
+            transition:
+                opacity 1s cubic-bezier(0.25, 1, 0.5, 1),
+                transform 1s cubic-bezier(0.25, 1, 0.5, 1),
+                filter 0.9s cubic-bezier(0.25, 1, 0.5, 1);
+            will-change: opacity, transform, filter;
+        }
+        .feature-card.visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+        }
+
+        /* ── Mobile nav overlay ── */
+        #mobile-menu {
+            transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+                        transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        #mobile-menu.hidden {
+            opacity: 0;
+            transform: translateY(-8px);
+            pointer-events: none;
+        }
+
+        /* ── Button hover glow ── */
+        .btn-brand {
+            transition: box-shadow 0.3s ease, transform 0.2s ease;
+        }
+        .btn-brand:hover {
+            box-shadow: 0 4px 20px rgba(230, 0, 118, 0.35);
+            transform: translateY(-1px);
+        }
+        .btn-brand:active {
+            transform: translateY(0);
+        }
+
+        /* ── Card hover lift (activates after reveal finishes) ── */
+        .card-hover.hoverable {
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .card-hover.hoverable:hover {
+            transform: translateY(-4px) scale(1);
+            box-shadow: 0 8px 24px 0 rgba(252, 231, 243, 0.8);
+        }
+        .card-hover-ai.hoverable {
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .card-hover-ai.hoverable:hover {
+            transform: translateY(-4px) scale(1);
+            box-shadow: 0 8px 24px 0 rgba(184, 217, 236, 0.8);
+        }
+
+        /* ── Hero screenshot positions ── */
+        .hero-shot-left  { left:  -20%; }
+        .hero-shot-right { right: -20%; }
+        @media (min-width: 640px) {
+            .hero-shot-left  { left:  2%; }
+            .hero-shot-right { right: 2%; }
+        }
+        @media (min-width: 1280px) {
+            .hero-shot-left  { left:  calc(50% - 490px); }
+            .hero-shot-right { right: calc(50% - 490px); }
+        }
+
+        /* ── Screenshot float animation ── */
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+        .screenshot-float {
+            animation: float 5s ease-in-out infinite;
+        }
+        .screenshot-float-delayed {
+            animation: float 5s ease-in-out 1.2s infinite;
+        }
+
+        /* ── Respect prefers-reduced-motion ── */
+        @media (prefers-reduced-motion: reduce) {
+            .reveal, .feature-card { transition: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
+            .screenshot-float, .screenshot-float-delayed { animation: none; }
+            .btn-brand, .card-hover.hoverable, .card-hover-ai.hoverable { transition: none; }
+        }
+    </style>
+</head>
+<body class="bg-white text-brand-dark font-sans antialiased">
+
+    <!-- Skip navigation -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
+
+    <!-- ═══════════════════════════════════════ NAV ═══════════════════════════════════════ -->
+    <nav class="sticky top-0 z-50 bg-white/40 backdrop-blur-2xl border-b border-transparent" id="navbar" aria-label="Main navigation">
+        <div class="max-w-[1200px] mx-auto flex items-center justify-between px-6 md:px-16 py-5">
+            <!-- Logo -->
+            <a href="/" class="flex items-center gap-3 group" aria-label="Brevity — home">
+                <img src="assets/brevity-bonsai.svg" alt="" class="h-10 w-auto" aria-hidden="true">
+                <span class="font-serif text-[32px] text-brand-dark leading-none tracking-tight group-hover:text-brand-pink transition-colors">Brevity</span>
+            </a>
+
+            <!-- Desktop Links -->
+            <div class="hidden md:flex items-center gap-8">
+                <a href="#about" class="text-base tracking-tight text-brand-dark hover:text-brand-pink transition-colors">About</a>
+                <a href="#features" class="text-base tracking-tight text-brand-dark hover:text-brand-pink transition-colors">Features</a>
+                <a href="#contact" class="text-base tracking-tight text-brand-dark hover:text-brand-pink transition-colors">Contact</a>
+                <a href="https://www.figma.com/community/plugin/1625587811095833566/brevity-character-auditor" target="_blank" rel="noopener noreferrer" class="btn-brand inline-flex items-center justify-center px-8 py-3 bg-brand-pink text-white font-semibold text-base rounded-full tracking-tight" aria-label="Install Brevity on Figma (opens in new tab)">Install</a>
+            </div>
+
+            <!-- Mobile Hamburger -->
+            <button class="md:hidden flex flex-col gap-[5px] p-2" id="menu-toggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="mobile-menu">
+                <span class="block w-6 h-[2px] bg-brand-dark transition-all" id="bar1" aria-hidden="true"></span>
+                <span class="block w-6 h-[2px] bg-brand-dark transition-all" id="bar2" aria-hidden="true"></span>
+                <span class="block w-6 h-[2px] bg-brand-dark transition-all" id="bar3" aria-hidden="true"></span>
+            </button>
+        </div>
+
+        <!-- Mobile Menu -->
+        <div class="md:hidden hidden absolute top-full left-0 right-0 bg-white border-b border-brand-gray shadow-lg" id="mobile-menu" aria-hidden="true">
+            <div class="flex flex-col items-center gap-4 px-6 py-6">
+                <a href="#about" class="text-base text-brand-dark hover:text-brand-pink transition-colors" onclick="closeMobileMenu()">About</a>
+                <a href="#features" class="text-base text-brand-dark hover:text-brand-pink transition-colors" onclick="closeMobileMenu()">Features</a>
+                <a href="#contact" class="text-base text-brand-dark hover:text-brand-pink transition-colors" onclick="closeMobileMenu()">Contact</a>
+                <a href="https://www.figma.com/community/plugin/1625587811095833566/brevity-character-auditor" target="_blank" rel="noopener noreferrer" class="btn-brand inline-flex items-center justify-center px-8 py-3 bg-brand-pink text-white font-semibold text-base rounded-full w-full text-center" aria-label="Install Brevity on Figma (opens in new tab)">Install</a>
+            </div>
+        </div>
+    </nav>
+
+    <main id="main-content">
+
+        <!-- ═══════════════════════════════════ HERO ═══════════════════════════════════ -->
+        <section class="bg-brand-pink-light overflow-hidden" aria-labelledby="hero-heading">
+            <div class="max-w-[1200px] mx-auto flex flex-col items-center px-6 md:px-16 pt-16 md:pt-16 pb-0">
+
+                <!-- Eyebrow Pill -->
+                <div class="mb-4 reveal">
+                    <span class="inline-block bg-white px-5 py-1.5 rounded-full text-brand-pink text-xs font-semibold uppercase tracking-widest">Figma Plugin</span>
+                </div>
+
+                <!-- Headline -->
+                <h1 id="hero-heading" class="font-serif font-semibold text-4xl sm:text-5xl md:text-[64px] leading-[1.12] text-center max-w-[720px] mb-4 reveal">
+                    Every character counts. Carefully refined.
+                </h1>
+
+                <!-- Subheadline -->
+                <p class="text-lg md:text-2xl text-center max-w-[640px] leading-relaxed tracking-tight mb-6 reveal">
+                    Brevity checks every text layer against your character limits to prevent issues on launch.
+                </p>
+
+                <!-- CTA -->
+                <div class="mb-4 reveal">
+                    <a href="https://www.figma.com/community/plugin/1625587811095833566/brevity-character-auditor" target="_blank" rel="noopener noreferrer" class="btn-brand inline-flex items-center justify-center px-10 py-3.5 bg-brand-pink text-white font-semibold text-base rounded-full tracking-tight" aria-label="Install Brevity from Figma (opens in new tab)">
+                        Install from Figma
+                    </a>
+                </div>
+                <p class="text-base text-brand-dark tracking-tight mb-10 reveal">Free to use. Pro features available by subscription.</p>
+            </div>
+
+            <!-- Screenshots — full viewport width, clips sides and bottom -->
+            <div class="relative w-full h-[380px] sm:h-[360px] md:h-[480px] overflow-hidden pt-3 reveal" aria-hidden="true">
+                <!-- Left Screenshot -->
+                <div class="hero-shot-left absolute top-[41px] w-[52%] sm:w-[33%] md:w-[30%] xl:w-[27%]">
+                    <div class="rounded-xl border border-brand-gray overflow-hidden screenshot-float-delayed shadow-screenshot">
+                        <img src="assets/brevity-hero-left.jpg" alt="" class="w-full h-auto block">
+                    </div>
+                </div>
+                <!-- Right Screenshot -->
+                <div class="hero-shot-right absolute top-[38px] w-[52%] sm:w-[33%] md:w-[30%] xl:w-[27%]">
+                    <div class="rounded-xl border border-brand-gray overflow-hidden screenshot-float-delayed shadow-screenshot">
+                        <img src="assets/brevity-hero-right.jpg" alt="" class="w-full h-auto block">
+                    </div>
+                </div>
+                <!-- Center Screenshot -->
+                <div class="absolute top-[10px] w-[58%] sm:w-[40%] xl:w-[27%] shadow-screenshot z-10" style="left: 50%; transform: translateX(-50%);">
+                    <div class="rounded-xl border border-brand-gray overflow-hidden screenshot-float">
+                        <img src="assets/brevity-hero-center.jpg" alt="" class="w-full h-auto block">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════════ ABOUT ═══════════════════════════════════ -->
+        <section id="about" class="bg-white" aria-labelledby="about-heading">
+            <div class="max-w-[1200px] mx-auto px-6 md:px-16 pt-20 md:pt-20 pb-0">
+                <h2 id="about-heading" class="font-serif font-semibold text-3xl md:text-[40px] leading-[1.2] text-center mb-10 reveal">What is Brevity?</h2>
+
+                <div class="flex flex-col md:flex-row gap-8 md:gap-8 reveal">
+                    <!-- Left Column — Description -->
+                    <div class="flex-1 text-lg tracking-tight leading-relaxed">
+                        <p class="mb-6">Append a number in brackets to any text layer name (like Headline [50]) and Brevity counts the characters, color-codes the status, and helps you fix anything over the limit without leaving the plugin.</p>
+                        <p class="mb-6">Works with frames, components, instances, groups, and sections. Supports dark mode and meets WCAG AA contrast throughout.</p>
+                        <p>Core auditing is free. Pro tools are available by subscription.</p>
+                    </div>
+
+                    <!-- Right Column — Steps -->
+                    <ol class="flex-1 flex flex-col gap-5 list-none" aria-label="How to use Brevity">
+                        <li class="flex gap-4 items-start">
+                            <div class="shrink-0 w-9 h-10 bg-brand-pink-light rounded-full flex items-center justify-center" aria-hidden="true">
+                                <span class="text-brand-pink font-semibold text-lg">1</span>
+                            </div>
+                            <p class="text-lg tracking-tight leading-relaxed pt-1.5">Name your layers with a character limit</p>
+                        </li>
+                        <li class="flex gap-4 items-start">
+                            <div class="shrink-0 w-9 h-10 bg-brand-pink-light rounded-full flex items-center justify-center" aria-hidden="true">
+                                <span class="text-brand-pink font-semibold text-lg">2</span>
+                            </div>
+                            <p class="text-lg tracking-tight leading-relaxed pt-1.5">Review the audit — see counts, status tiles, and click any layer to zoom to it</p>
+                        </li>
+                        <li class="flex gap-4 items-start">
+                            <div class="shrink-0 w-9 h-10 bg-brand-pink-light rounded-full flex items-center justify-center" aria-hidden="true">
+                                <span class="text-brand-pink font-semibold text-lg">3</span>
+                            </div>
+                            <p class="text-lg tracking-tight leading-relaxed pt-1.5">Fix and ship — edit text on the canvas and watch counts update live</p>
+                        </li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════ DIVIDER ═══════════════════════════════ -->
+        <div class="max-w-[1200px] mx-auto px-6 md:px-16 py-20" role="presentation">
+            <hr class="border-brand-gray" aria-hidden="true">
+        </div>
+
+        <!-- ═══════════════════════════════ FEATURES ═══════════════════════════════ -->
+        <section id="features" class="bg-white" aria-labelledby="features-heading">
+            <div class="max-w-[1200px] mx-auto px-6 md:px-16 pb-20">
+                <!-- Header -->
+                <div class="text-center mb-10 reveal">
+                    <h2 id="features-heading" class="font-serif font-semibold text-3xl md:text-[40px] leading-[1.2] mb-4">Features</h2>
+                    <p class="text-lg tracking-tight max-w-[536px] mx-auto leading-relaxed">Core auditing is free. Pro tools require a subscription.</p>
+                </div>
+
+                <!-- Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+
+                    <!-- Card: Character auditing -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-text-aa text-[22px] text-brand-pink"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Character auditing</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Scan every text layer in a frame, component, group, or section and see counts at a glance.</p>
+                    </div>
+
+                    <!-- Card: Set character limits -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-brackets-square text-[22px] text-brand-pink"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Set character limits</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Add [N] to any layer name to set a maximum. Brevity flags each layer as good, close, or over.</p>
+                    </div>
+
+                    <!-- Card: Summary dashboard -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-chart-bar text-[22px] text-brand-pink"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Summary dashboard</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Status tiles show totals for within-limit, near-limit, and over-limit layers at a glance.</p>
+                    </div>
+
+                    <!-- Card: Click-to-zoom -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-cursor-click text-[22px] text-brand-pink"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Click-to-zoom</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Click any row to jump straight to that layer on canvas and select it.</p>
+                    </div>
+
+                    <!-- Card: Search & filter -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-magnifying-glass text-[22px] text-brand-pink"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Search &amp; filter</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Filter the layer list by name and find the text you need instantly.</p>
+                    </div>
+
+                    <!-- Card: Configurable options -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-sliders-horizontal text-[22px] text-brand-pink"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Configurable options</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Toggle space counting or include hidden layers to match your workflow.</p>
+                    </div>
+
+                    <!-- Card: Hidden layer detection -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-eye-slash text-[22px] text-brand-pink"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Hidden layer detection</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Spot hidden text layers at a glance and choose to include or exclude them.</p>
+                    </div>
+
+                    <!-- Card: Live sync -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-arrows-clockwise text-[22px] text-brand-pink"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Live sync</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Counts update in real time as you edit text on canvas. No re-running needed.</p>
+                    </div>
+
+                    <!-- Card: Over-limit canvas highlight (PRO) -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-warning-circle text-[22px] text-brand-pink"></i>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-xl leading-7 tracking-tight">Over-limit canvas highlight</h3>
+                            <span class="shrink-0 ml-3 bg-brand-pink text-white text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded" aria-label="Pro feature">Pro</span>
+                        </div>
+                        <p class="text-base leading-relaxed tracking-tight">Red outlines on over-limit layers persist on canvas, even when deselected.</p>
+                    </div>
+
+                    <!-- Card: Smart limits (PRO) -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-magic-wand text-[22px] text-brand-pink"></i>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-xl leading-7 tracking-tight">Smart limits</h3>
+                            <span class="shrink-0 ml-3 bg-brand-pink text-white text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded" aria-label="Pro feature">Pro</span>
+                        </div>
+                        <p class="text-base leading-relaxed tracking-tight">Auto-suggest character limits based on layer dimensions, font size, and line height.</p>
+                    </div>
+
+                    <!-- Card: Inline layer editor (PRO) -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-pencil-simple text-[22px] text-brand-pink"></i>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-xl leading-7 tracking-tight">Inline layer editor</h3>
+                            <span class="shrink-0 ml-3 bg-brand-pink text-white text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded" aria-label="Pro feature">Pro</span>
+                        </div>
+                        <p class="text-base leading-relaxed tracking-tight">Rename layers and adjust character limits directly from the plugin panel.</p>
+                    </div>
+
+                    <!-- Card: Batch update (PRO) -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-stack text-[22px] text-brand-pink"></i>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-xl leading-7 tracking-tight">Batch update</h3>
+                            <span class="shrink-0 ml-3 bg-brand-pink text-white text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded" aria-label="Pro feature">Pro</span>
+                        </div>
+                        <p class="text-base leading-relaxed tracking-tight">Update all layers sharing the same name across the container in one action.</p>
+                    </div>
+
+                    <!-- Card: Auto-truncate (PRO) -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-scissors text-[22px] text-brand-pink"></i>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-xl leading-7 tracking-tight">Auto-truncate</h3>
+                            <span class="shrink-0 ml-3 bg-brand-pink text-white text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded" aria-label="Pro feature">Pro</span>
+                        </div>
+                        <p class="text-base leading-relaxed tracking-tight">Trim over-limit text to fit with one click. Undo restores it instantly.</p>
+                    </div>
+
+                    <!-- Card: Export CSV report (PRO) -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-file-arrow-down text-[22px] text-brand-pink"></i>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-xl leading-7 tracking-tight">Export CSV report</h3>
+                            <span class="shrink-0 ml-3 bg-brand-pink text-white text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded" aria-label="Pro feature">Pro</span>
+                        </div>
+                        <p class="text-base leading-relaxed tracking-tight">Download a full audit report with names, counts, limits, and status.</p>
+                    </div>
+
+                    <!-- Card: Themes (PRO) -->
+                    <div class="feature-card card-hover bg-white rounded-[10px] border border-brand-gray shadow-card p-6">
+                        <div class="w-10 h-10 bg-brand-pink-light rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-palette text-[22px] text-brand-pink"></i>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-xl leading-7 tracking-tight">Themes</h3>
+                            <span class="shrink-0 ml-3 bg-brand-pink text-white text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded" aria-label="Pro feature">Pro</span>
+                        </div>
+                        <p class="text-base leading-relaxed tracking-tight">Six color themes with automatic light and dark mode, all WCAG AA compliant.</p>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- ═══════════════════════════════ AI FEATURES ═══════════════════════════════ -->
+        <section class="bg-brand-ai-blue" aria-labelledby="ai-heading">
+            <div class="max-w-[1200px] mx-auto px-6 md:px-16 py-20 md:py-24">
+
+                <!-- Header -->
+                <div class="text-center mb-12 reveal">
+                    <div class="inline-flex items-center gap-2 bg-white/60 px-4 py-1.5 rounded-full mb-6" aria-hidden="true">
+                        <i class="ph ph-sparkle text-brand-ai-accent text-sm leading-none"></i>
+                        <span class="text-brand-dark/75 text-xs font-semibold uppercase tracking-widest">Pro · AI-Powered</span>
+                    </div>
+                    <h2 id="ai-heading" class="font-serif font-semibold text-3xl md:text-[40px] leading-[1.2] text-brand-dark mb-4">Smarter with AI.</h2>
+                    <p class="text-brand-dark/75 text-lg tracking-tight max-w-[560px] mx-auto leading-relaxed">AI features are included in the Pro subscription. Requires your own Google Gemini API key — private, lightweight, and free to set up.</p>
+                </div>
+
+                <!-- Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 md:gap-6 mb-10">
+
+                    <div class="feature-card card-hover-ai bg-white rounded-[10px] border border-brand-gray shadow-card-ai p-6">
+                        <div class="w-10 h-10 bg-brand-ai-blue rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-sparkle text-[22px] text-brand-ai-accent"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Smart Rewrite</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Rewrites over-limit text to fit while preserving meaning and tone.</p>
+                    </div>
+
+                    <div class="feature-card card-hover-ai bg-white rounded-[10px] border border-brand-gray shadow-card-ai p-6">
+                        <div class="w-10 h-10 bg-brand-ai-blue rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-eye text-[22px] text-brand-ai-accent"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Global Review</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Reviews all text layers at once for consistent fit and tone across the design.</p>
+                    </div>
+
+                    <div class="feature-card card-hover-ai bg-white rounded-[10px] border border-brand-gray shadow-card-ai p-6">
+                        <div class="w-10 h-10 bg-brand-ai-blue rounded-[10px] flex items-center justify-center mb-4" aria-hidden="true">
+                            <i class="ph ph-lightbulb text-[22px] text-brand-ai-accent"></i>
+                        </div>
+                        <h3 class="font-semibold text-xl leading-7 tracking-tight mb-2">Context-Aware Limits</h3>
+                        <p class="text-base leading-relaxed tracking-tight">Smart limits that understand content type and hierarchy — no guesswork needed.</p>
+                    </div>
+
+                </div>
+
+                <!-- Gemini attribution -->
+                <p class="text-center text-brand-dark/75 text-sm tracking-tight reveal">Powered by Google Gemini &middot; API key from Google AI Studio &middot; Free tier covers most use</p>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ═══════════════════════════════════ FOOTER ═══════════════════════════════════ -->
+    <footer id="contact" class="bg-white" aria-label="Contact">
+        <div class="max-w-[1200px] mx-auto flex flex-col items-center px-6 md:px-16 py-20 text-center">
+            <!-- Decorative logo -->
+            <div class="mb-6" aria-hidden="true">
+                <img src="assets/brevity-bonsai.svg" alt="" class="h-[102px] w-auto">
+            </div>
+            <h2 class="font-serif text-2xl md:text-[32px] leading-[1.2] mb-6">Questions, feedback, or feature requests?</h2>
+            <address class="not-italic mb-8">
+                <a href="mailto:brevity@peteburgess.com" class="text-brand-pink font-semibold text-xl md:text-2xl tracking-tight hover:underline underline-offset-4">brevity@peteburgess.com</a>
+            </address>
+            <div class="pt-6 border-t border-brand-pink/15 w-full max-w-md">
+                <p class="text-base text-brand-dark tracking-tight">&copy; 2026 Pete Burgess. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        // ── Mobile menu toggle ──
+        const toggle = document.getElementById('menu-toggle');
+        const mobileMenu = document.getElementById('mobile-menu');
+        let menuOpen = false;
+
+        toggle.addEventListener('click', () => {
+            menuOpen = !menuOpen;
+            mobileMenu.classList.toggle('hidden', !menuOpen);
+            mobileMenu.setAttribute('aria-hidden', String(!menuOpen));
+            toggle.setAttribute('aria-expanded', String(menuOpen));
+            toggle.setAttribute('aria-label', menuOpen ? 'Close navigation menu' : 'Open navigation menu');
+            document.getElementById('bar1').style.transform = menuOpen ? 'rotate(45deg) translate(5px, 5px)' : '';
+            document.getElementById('bar2').style.opacity = menuOpen ? '0' : '1';
+            document.getElementById('bar3').style.transform = menuOpen ? 'rotate(-45deg) translate(5px, -5px)' : '';
+        });
+
+        function closeMobileMenu() {
+            menuOpen = false;
+            mobileMenu.classList.add('hidden');
+            mobileMenu.setAttribute('aria-hidden', 'true');
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.setAttribute('aria-label', 'Open navigation menu');
+            document.getElementById('bar1').style.transform = '';
+            document.getElementById('bar2').style.opacity = '1';
+            document.getElementById('bar3').style.transform = '';
+        }
+
+        // ── Nav border on scroll ──
+        const navbar = document.getElementById('navbar');
+        window.addEventListener('scroll', () => {
+            navbar.classList.toggle('border-brand-gray', window.scrollY > 10);
+        }, { passive: true });
+
+        // ── Animations: skip entirely if user prefers reduced motion ──
+        if (prefersReducedMotion) {
+            document.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'));
+            document.querySelectorAll('.feature-card').forEach(el => el.classList.add('visible', 'hoverable'));
+        } else {
+            // Section reveals with sequential stagger
+            let sectionDelay = 0;
+            const sectionObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    entry.target.style.transitionDelay = `${sectionDelay}ms`;
+                    sectionDelay += 120;
+                    entry.target.classList.add('visible');
+                    sectionObserver.unobserve(entry.target);
+                    clearTimeout(sectionObserver._resetTimer);
+                    sectionObserver._resetTimer = setTimeout(() => { sectionDelay = 0; }, 300);
+                });
+            }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' });
+
+            document.querySelectorAll('.reveal').forEach(el => sectionObserver.observe(el));
+
+            // Feature cards: row-aware left-to-right cascade
+            let cardBatch = [];
+            let cardTimer = null;
+
+            function flushCardBatch() {
+                cardBatch.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left);
+                cardBatch.forEach((el, i) => {
+                    const delay = i * 130;
+                    el.style.transitionDelay = `${delay}ms`;
+                    el.classList.add('visible');
+                    setTimeout(() => {
+                        el.style.transitionDelay = '';
+                        el.classList.add('hoverable');
+                    }, delay + 1050);
+                });
+                cardBatch = [];
+            }
+
+            const cardObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    cardBatch.push(entry.target);
+                    cardObserver.unobserve(entry.target);
+                    clearTimeout(cardTimer);
+                    cardTimer = setTimeout(flushCardBatch, 60);
+                });
+            }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+
+            document.querySelectorAll('.feature-card').forEach(el => cardObserver.observe(el));
+        }
+    </script>
+
+</body>
+</html>
