@@ -715,8 +715,13 @@
                     updatePauseBtn();
                 });
 
-                let resizeTimer;
+                // Only recompute on WIDTH changes — mobile address bar hides/shows
+                // change only the height and would otherwise snap the carousel back to start
+                let resizeTimer, lastW = carousel.offsetWidth;
                 window.addEventListener('resize', () => {
+                    const newW = carousel.offsetWidth;
+                    if (newW === lastW) return; // height-only (mobile chrome bar) — ignore
+                    lastW = newW;
                     clearTimeout(resizeTimer);
                     resizeTimer = setTimeout(() => {
                         computeLayout();
