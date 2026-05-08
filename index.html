@@ -138,32 +138,48 @@
             box-shadow: 0 8px 24px 0 rgba(184, 217, 236, 0.8);
         }
 
-        /* ── Hero screenshot positions ── */
-        .hero-shot-left  { left:  -20%; }
-        .hero-shot-right { right: -20%; }
-        @media (min-width: 640px) {
-            .hero-shot-left  { left:  2%; }
-            .hero-shot-right { right: 2%; }
+        /* ── Hero carousel ── */
+        .hero-item {
+            flex: none;
+            width: 175px;
+            position: relative;
+            transform: translateY(0);
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        @media (min-width: 1280px) {
-            .hero-shot-left  { left:  calc(50% - 490px); }
-            .hero-shot-right { right: calc(50% - 490px); }
+        .hero-item.hero-center {
+            transform: translateY(-12px);
+            z-index: 10;
         }
+        @media (min-width: 640px)  { .hero-item { width: 210px; } }
+        @media (min-width: 1024px) { .hero-item { width: 250px; } }
 
-        /* ── Screenshot hover lift ── */
-        .screenshot-panel {
-            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), z-index 0s;
-            cursor: default;
-        }
-        .screenshot-panel:hover {
-            transform: translateY(-10px);
+        /* Pause button */
+        #hero-pause-btn {
+            position: absolute;
+            bottom: 0.75rem;
+            right: 1rem;
             z-index: 20;
+            width: 2rem;
+            height: 2rem;
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            border: 1px solid #d9d9d9;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 13px;
+            color: #323232;
+            transition: background 0.2s;
         }
+        #hero-pause-btn:hover { background: #ffffff; }
 
         /* ── Respect prefers-reduced-motion ── */
         @media (prefers-reduced-motion: reduce) {
             .reveal, .feature-card { transition: none !important; opacity: 1 !important; transform: none !important; filter: none !important; }
-            .screenshot-panel { transition: none; }
+            .hero-item { transition: none; }
             .btn-brand, .card-hover.hoverable, .card-hover-ai.hoverable { transition: none; }
         }
     </style>
@@ -239,26 +255,14 @@
                 <p class="text-base text-brand-dark tracking-tight mb-10 reveal">Free to use. Pro features available by subscription.</p>
             </div>
 
-            <!-- Screenshots — full viewport width, clips sides and bottom -->
-            <div class="relative w-full h-[380px] sm:h-[360px] md:h-[480px] overflow-hidden pt-3 reveal" aria-hidden="true">
-                <!-- Left Screenshot -->
-                <div class="screenshot-panel hero-shot-left absolute top-[41px] w-[52%] sm:w-[33%] md:w-[30%] xl:w-[27%]">
-                    <div class="rounded-xl border border-brand-gray overflow-hidden shadow-screenshot">
-                        <img src="assets/brevity-hero-left.jpg" alt="" class="w-full h-auto block">
-                    </div>
+            <!-- Hero carousel -->
+            <div class="relative w-full h-[292px] sm:h-[332px] lg:h-[392px] reveal">
+                <div id="hero-carousel" class="w-full h-full overflow-hidden" aria-hidden="true">
+                    <div id="hero-track" class="flex gap-4 h-full pt-3" style="will-change: transform;"></div>
                 </div>
-                <!-- Right Screenshot -->
-                <div class="screenshot-panel hero-shot-right absolute top-[38px] w-[52%] sm:w-[33%] md:w-[30%] xl:w-[27%]">
-                    <div class="rounded-xl border border-brand-gray overflow-hidden shadow-screenshot">
-                        <img src="assets/brevity-hero-right.jpg" alt="" class="w-full h-auto block">
-                    </div>
-                </div>
-                <!-- Center Screenshot -->
-                <div class="screenshot-panel absolute top-[10px] w-[58%] sm:w-[40%] xl:w-[27%] shadow-screenshot z-10" style="left: 50%; transform: translateX(-50%);">
-                    <div class="rounded-xl border border-brand-gray overflow-hidden">
-                        <img src="assets/brevity-hero-center.jpg" alt="" class="w-full h-auto block">
-                    </div>
-                </div>
+                <button id="hero-pause-btn" aria-label="Pause slideshow" aria-pressed="false">
+                    <i class="ph ph-pause" aria-hidden="true"></i>
+                </button>
             </div>
         </section>
 
@@ -629,6 +633,122 @@
 
             document.querySelectorAll('.feature-card').forEach(el => cardObserver.observe(el));
         }
+
+        // ── Hero carousel ──
+        (function () {
+            // Image order: main starts centre; alternate dark/light for visual rhythm
+            const IMAGES = [
+                'brevity-hero-main.jpg',
+                'brevity-hero-rename.jpg',
+                'brevity-hero-how.jpg',
+                'brevity-hero-ai-global-review.jpg',
+                'brevity-hero-search.jpg',
+                'brevity-hero-themes.jpg',
+                'brevity-hero-features.jpg',
+                'brevity-hero-smart-limits.jpg',
+                'brevity-hero-options.jpg',
+            ];
+            const N = IMAGES.length;
+            const carousel = document.getElementById('hero-carousel');
+            const track    = document.getElementById('hero-track');
+            const pauseBtn = document.getElementById('hero-pause-btn');
+            if (!carousel || !track) return;
+
+            // Build 3 copies for a seamless infinite loop
+            [...IMAGES, ...IMAGES, ...IMAGES].forEach(src => {
+                const item = document.createElement('div');
+                item.className = 'hero-item';
+                item.innerHTML = `<div class="rounded-xl border border-brand-gray overflow-hidden shadow-screenshot h-full"><img src="assets/${src}" alt="" class="w-full h-auto block" loading="lazy" decoding="async"></div>`;
+                track.appendChild(item);
+            });
+
+            const items = [...track.querySelectorAll('.hero-item')];
+            const SPEED = 0.45; // px per rAF frame
+
+            let STEP = 0, ITEM_W = 0, CONTAINER_W = 0, initialOffset = 0;
+            let offset = 0, autoPlay = !prefersReducedMotion, hovered = false;
+
+            function computeLayout() {
+                ITEM_W      = items[0].offsetWidth;
+                // offsetLeft is relative to the track, unaffected by transform
+                STEP        = items.length > 1 ? items[1].offsetLeft - items[0].offsetLeft : ITEM_W + 16;
+                CONTAINER_W = carousel.offsetWidth;
+                // Place copy-2's item 0 (main) at the container centre
+                initialOffset = N * STEP + ITEM_W / 2 - CONTAINER_W / 2;
+            }
+
+            function applyOffset() {
+                track.style.transform = `translateX(${-offset}px)`;
+            }
+
+            function updateCenter() {
+                const centre   = CONTAINER_W / 2;
+                const halfStep = STEP / 2;
+                items.forEach((item, i) => {
+                    const itemCentre = i * STEP + ITEM_W / 2 - offset;
+                    item.classList.toggle('hero-center', Math.abs(itemCentre - centre) < halfStep);
+                });
+            }
+
+            function tick() {
+                if (autoPlay && !hovered) {
+                    offset += SPEED;
+                    // Seamless wrap: once we've scrolled one full set, jump back
+                    if (offset >= initialOffset + N * STEP) offset -= N * STEP;
+                    applyOffset();
+                    updateCenter();
+                }
+                requestAnimationFrame(tick);
+            }
+
+            function updatePauseBtn() {
+                if (!pauseBtn) return;
+                pauseBtn.setAttribute('aria-pressed', String(!autoPlay));
+                pauseBtn.setAttribute('aria-label', autoPlay ? 'Pause slideshow' : 'Play slideshow');
+                pauseBtn.querySelector('i').className = autoPlay ? 'ph ph-pause' : 'ph ph-play';
+            }
+
+            function init() {
+                computeLayout();
+                offset = initialOffset;
+                applyOffset();
+                updateCenter();
+
+                if (prefersReducedMotion) {
+                    // Static display — hide pause button, no rAF
+                    if (pauseBtn) pauseBtn.hidden = true;
+                    return;
+                }
+
+                // Hover pause (mouse only)
+                carousel.addEventListener('mouseenter', () => { hovered = true; });
+                carousel.addEventListener('mouseleave', () => { hovered = false; });
+
+                // Explicit pause button
+                pauseBtn?.addEventListener('click', () => {
+                    autoPlay = !autoPlay;
+                    updatePauseBtn();
+                });
+
+                // Recompute on resize and re-centre
+                let resizeTimer;
+                window.addEventListener('resize', () => {
+                    clearTimeout(resizeTimer);
+                    resizeTimer = setTimeout(() => {
+                        computeLayout();
+                        offset = initialOffset;
+                        applyOffset();
+                        updateCenter();
+                    }, 150);
+                }, { passive: true });
+
+                requestAnimationFrame(tick);
+            }
+
+            // Wait for DOM layout to be ready
+            if (document.readyState === 'complete') { init(); }
+            else { window.addEventListener('load', init); }
+        })();
     </script>
 
 </body>
